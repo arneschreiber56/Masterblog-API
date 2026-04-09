@@ -30,20 +30,30 @@ def validate_data(data):
         return False
     return True
 
+
+def find_post_by_id(id):
+    """finds and returns a post by id or None, if search fails"""
+    for post in POSTS:
+        if post.get("id") == id:
+            return post
+    return None
+
+
 @app.route('/api/posts', methods=["GET", "POST"])
 @limiter.limit("10/minute") # limits the number of requests
 def get_posts():
     app.logger.debug(f"{request.method} received for /api/posts")
     if request.method == "POST":
-        data = request.get_json()
+        # raise Exception supressed silent=True -> Error handling later with abort
+        data = request.get_json(silent=True)
         if not validate_data(data):
-            abort(400, description="Data")
+            abort(400, description="Request body is missing or invalid JSON")
         new_title = data.get("title", "")
         new_content = data.get("content", "")
         if not new_title:
-            abort(400, description="Title")
+            abort(400, description="Title is missing")
         if not new_content:
-            abort(400, description="Content")
+            abort(400, description="Content is missing")
         new_id = max((post["id"] for post in POSTS), default=0) +1
         new_post = {
             "id": new_id,
@@ -55,16 +65,31 @@ def get_posts():
     return jsonify(POSTS)
 
 
+@app.route("/api/posts/<int:id>", methods=["DELETE"])
+@limiter.limit("10/minute")
+def delete_post(id):
+    """Deletes a Post by id"""
+    post = find_post_by_id(id)
+    if post is None:
+        abort(404, description="Could not find an post with this ID!")
+
+    POSTS.remove(post)
+
+    return jsonify(post), 200
+
+
 @app.errorhandler(400)
 def bad_request_error(error):
     """handle invalid data error"""
-    return jsonify({"error": f"Bad Request: {error.description} is missing!"}), 400
+    return jsonify(
+        {"error": f"Bad Request: {error.description}!"}
+    ), 400
 
 
 @app.errorhandler(404)
 def not_found_error(error):
     """handle http errors in case a ressource is not found"""
-    return jsonify({"error": "Requested ressource could not be found!"}), 404
+    return jsonify({"error": f"Not found:{error.description}"}), 404
 
 
 @app.errorhandler(405)
