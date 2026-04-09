@@ -65,13 +65,38 @@ def get_posts():
     return jsonify(POSTS)
 
 
+@app.route("/api/posts/<int:id>", methods=["PUT"])
+@limiter.limit("10/minute")
+def update_post(id):
+    """Updates a Post by id"""
+    app.logger.debug(f"{request.method} request received for api/posts/{id}")
+    post = find_post_by_id(id)
+    if post is None:
+        abort(404, description="Could not find a post with this ID!")
+    new_data = request.get_json(silent=True)
+    if not new_data:
+        abort(400, description="Request body is missing or invalid JSON")
+    new_post = post
+    new_title = new_data.get("title", "")
+    new_content = new_data.get("content", "")
+    if new_title:
+        # new_post points already at the correct location in POSTS,
+        # so it will change immediately the global variable!
+        new_post["title"] = new_title
+    if new_content:
+        new_post["content"] = new_content
+
+    return jsonify(new_post), 200
+
+
 @app.route("/api/posts/<int:id>", methods=["DELETE"])
 @limiter.limit("10/minute")
 def delete_post(id):
     """Deletes a Post by id"""
+    app.logger.debug(f"{request.method} request received for api/posts/{id}")
     post = find_post_by_id(id)
     if post is None:
-        abort(404, description="Could not find an post with this ID!")
+        abort(404, description="Could not find a post with this ID!")
 
     POSTS.remove(post)
 
