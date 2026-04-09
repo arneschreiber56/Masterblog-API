@@ -2,7 +2,7 @@
 in this case for an Blog application"""
 import logging
 
-from flask import Flask, jsonify, request
+from flask import Flask, abort, jsonify, request
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -23,24 +23,48 @@ POSTS = [
     {"id": 2, "title": "Second post", "content": "This is the second post."},
 ]
 
+def validate_data(data):
+    """validates data of post request. Returns True if correct, returns False if
+    empty"""
+    if not data:
+        return False
+    return True
 
-@app.route('/api/posts', methods=['GET'])
+@app.route('/api/posts', methods=["GET", "POST"])
 @limiter.limit("10/minute") # limits the number of requests
 def get_posts():
     app.logger.debug(f"{request.method} received for /api/posts")
+    if request.method == "POST":
+        data = request.get_json()
+        if not validate_data(data):
+            abort(400, description="Data")
+        new_title = data.get("title", "")
+        new_content = data.get("content", "")
+        if not new_title:
+            abort(400, description="Title")
+        if not new_content:
+            abort(400, description="Content")
+        new_id = max((post["id"] for post in POSTS), default=0) +1
+        new_post = {
+            "id": new_id,
+            "title": new_title,
+            "content": new_content
+            }
+        POSTS.append(new_post)
+        return jsonify(new_post), 201
     return jsonify(POSTS)
 
 
 @app.errorhandler(400)
-def invalid_data_error(error):
+def bad_request_error(error):
     """handle invalid data error"""
-    return jsonify({"error": "Invalid data sent!"})
+    return jsonify({"error": f"Bad Request: {error.description} is missing!"}), 400
 
 
 @app.errorhandler(404)
 def not_found_error(error):
     """handle http errors in case a ressource is not found"""
-    return jsonify({"error": "Requested ressource could not be found!"})
+    return jsonify({"error": "Requested ressource could not be found!"}), 404
 
 
 @app.errorhandler(405)
