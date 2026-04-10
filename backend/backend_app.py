@@ -1,5 +1,5 @@
 """Masterblog: Exercise to practice the backend development of an API,
-in this case for an Blog application"""
+in this case for a Blog application"""
 import logging
 
 from flask import Flask, abort, jsonify, request
@@ -23,33 +23,56 @@ POSTS = [
     {"id": 2, "title": "Second post", "content": "This is the second post."},
 ]
 
-def validate_data(data):
-    """validates data of post request. Returns True if correct, returns False if
+LIMIT_REQ = "10/minute"
+
+
+def has_data(data):
+    """validates data of POST request. Returns True if correct, returns False if
     empty"""
     if not data:
         return False
     return True
 
 
-def find_post_by_id(id):
-    """finds and returns a post by id or None, if search fails"""
+def find_post_by_id(post_id):
+    """finds and returns a post by ID or None if search fails"""
     for post in POSTS:
-        if post.get("id") == id:
+        if post.get("id") == post_id:
             return post
     return None
 
 
+def find_post_by_title(title_query, post):
+    """finds a matching post by matching the query in the title.
+    Returns True if match or False if not. Returns True if a query is empty"""
+    if title_query:
+        match_title = title_query in post.get("title").lower()
+    else:
+        match_title = True
+    return match_title
+
+
+def find_post_by_content(content_query, post):
+    """finds a matching post by matching the query with the content. Returns
+    True if match or False if not. Returns True if a query is empty"""
+    if content_query:
+        match_content = content_query in post.get("content").lower()
+    else:
+        match_content = True
+    return match_content
+
+
 @app.route('/api/posts', methods=["GET", "POST"])
-@limiter.limit("10/minute") # limits the number of requests
+@limiter.limit(LIMIT_REQ) # limits the number of requests
 def get_posts():
     app.logger.debug(f"{request.method} received for /api/posts")
     if request.method == "POST":
-        # raise Exception supressed silent=True -> Error handling later with abort
+        # raise Exception suppressed silent=True -> Error handling later with abort
         data = request.get_json(silent=True)
-        if not validate_data(data):
+        if not has_data(data):
             abort(400, description="Request body is missing or invalid JSON")
-        new_title = data.get("title", "")
-        new_content = data.get("content", "")
+        new_title = data.get("title", "").strip()
+        new_content = data.get("content", "").strip()
         if not new_title:
             abort(400, description="Title is missing")
         if not new_content:
@@ -65,20 +88,43 @@ def get_posts():
     return jsonify(POSTS)
 
 
-@app.route("/api/posts/<int:id>", methods=["PUT"])
-@limiter.limit("10/minute")
-def update_post(id):
+@app.route("/api/posts/search", methods=["GET"])
+@limiter.limit(LIMIT_REQ)
+def search_posts():
+    """GET-request route for searching and returning posts with the search
+    phrase in the title or content. Returns an empty list if no match is found.
+    """
+    app.logger.debug(f"{request.method} request received for api/posts/search")
+    title_query = request.args.get("title", "").strip().lower()
+    content_query = request.args.get("content", "").strip().lower()
+    matching_posts = []
+
+    for post in POSTS:
+        match_title = find_post_by_title(title_query, post)
+        match_content = find_post_by_content(content_query, post)
+
+        # for a double query only a post should be returned, which matches all
+        # search queries
+        if match_title and match_content:
+            matching_posts.append(post)
+
+    return jsonify(matching_posts)
+
+
+@app.route("/api/posts/<int:post_id>", methods=["PUT"])
+@limiter.limit(LIMIT_REQ)
+def update_post(post_id):
     """Updates a Post by id"""
-    app.logger.debug(f"{request.method} request received for api/posts/{id}")
-    post = find_post_by_id(id)
+    app.logger.debug(f"{request.method} request received for api/posts/{post_id}")
+    post = find_post_by_id(post_id)
     if post is None:
         abort(404, description="Could not find a post with this ID!")
     new_data = request.get_json(silent=True)
     if not new_data:
         abort(400, description="Request body is missing or invalid JSON")
     new_post = post
-    new_title = new_data.get("title", "")
-    new_content = new_data.get("content", "")
+    new_title = new_data.get("title", "").strip()
+    new_content = new_data.get("content", "").strip()
     if new_title:
         # new_post points already at the correct location in POSTS,
         # so it will change immediately the global variable!
@@ -89,12 +135,12 @@ def update_post(id):
     return jsonify(new_post), 200
 
 
-@app.route("/api/posts/<int:id>", methods=["DELETE"])
-@limiter.limit("10/minute")
-def delete_post(id):
+@app.route("/api/posts/<int:post_id>", methods=["DELETE"])
+@limiter.limit(LIMIT_REQ)
+def delete_post(post_id):
     """Deletes a Post by id"""
-    app.logger.debug(f"{request.method} request received for api/posts/{id}")
-    post = find_post_by_id(id)
+    app.logger.debug(f"{request.method} request received for api/posts/{post_id}")
+    post = find_post_by_id(post_id)
     if post is None:
         abort(404, description="Could not find a post with this ID!")
 
@@ -114,7 +160,7 @@ def bad_request_error(error):
 @app.errorhandler(404)
 def not_found_error(error):
     """handle http errors in case a ressource is not found"""
-    return jsonify({"error": f"Not found:{error.description}"}), 404
+    return jsonify({"error": f"Not found: {error.description}"}), 404
 
 
 @app.errorhandler(405)
