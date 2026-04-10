@@ -62,6 +62,14 @@ def find_post_by_content(content_query, post):
     return match_content
 
 
+def sort_posts(lst, sort_field, direction):
+    """Sorts posts after method in sort in order given by direction. Returns
+    sorted list"""
+    sort_direc = direction == "desc"
+    sorted_list = sorted(lst, key=lambda x: x[sort_field], reverse=sort_direc )
+    return sorted_list
+
+
 @app.route('/api/posts', methods=["GET", "POST"])
 @limiter.limit(LIMIT_REQ) # limits the number of requests
 def get_posts():
@@ -85,7 +93,18 @@ def get_posts():
             }
         POSTS.append(new_post)
         return jsonify(new_post), 201
-    return jsonify(POSTS)
+    sort = request.args.get("sort", "").strip()
+    direction = request.args.get("direction", "").strip()
+    lst = POSTS[:]
+    if sort:
+        if direction not in ("asc", "desc"):
+            abort(400, description="Sort direction is not valid")
+        if sort not in ("title", "content"):
+            abort(400, description="Sort method is not valid")
+
+        sorted_posts = sort_posts(lst, sort, direction)
+        return jsonify(sorted_posts), 200
+    return jsonify(POSTS), 200
 
 
 @app.route("/api/posts/search", methods=["GET"])
