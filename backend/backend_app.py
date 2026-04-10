@@ -1,5 +1,9 @@
-"""Masterblog: Exercise to practice the backend development of an API,
-in this case for a Blog application"""
+"""Masterblog API.
+
+A simple Flask-based REST API for managing blog posts.
+This project focuses on practicing backend development concepts such as
+routing, validation, filtering, sorting, and API documentation.
+"""
 import logging
 
 from flask import Flask, abort, jsonify, request
@@ -39,15 +43,14 @@ swagger_ui_blueprint = get_swaggerui_blueprint(
 app.register_blueprint(swagger_ui_blueprint, url_prefix=SWAGGER_URL)
 
 def has_data(data):
-    """validates data of POST request. Returns True if correct, returns False if
-    empty"""
+    """Check if the request contains any usable JSON data."""
     if not data:
         return False
     return True
 
 
 def find_post_by_id(post_id):
-    """finds and returns a post by ID or None if search fails"""
+    """Return the post with the given ID, or None if not found."""
     for post in POSTS:
         if post.get("id") == post_id:
             return post
@@ -55,8 +58,10 @@ def find_post_by_id(post_id):
 
 
 def find_post_by_title(title_query, post):
-    """finds a matching post by matching the query in the title.
-    Returns True if match or False if not. Returns True if a query is empty"""
+    """Check if a post matches the title search query.
+
+     If no query is given, always returns True.
+     """
     if title_query:
         match_title = title_query in post.get("title").lower()
     else:
@@ -65,8 +70,10 @@ def find_post_by_title(title_query, post):
 
 
 def find_post_by_content(content_query, post):
-    """finds a matching post by matching the query with the content. Returns
-    True if match or False if not. Returns True if a query is empty"""
+    """Check if a post matches the content search query.
+
+     If no query is given, always returns True.
+     """
     if content_query:
         match_content = content_query in post.get("content").lower()
     else:
@@ -75,8 +82,10 @@ def find_post_by_content(content_query, post):
 
 
 def sort_posts(lst, sort_field, direction):
-    """Sorts posts after method in sort in order given by direction. Returns
-    sorted list"""
+    """Sort posts by a given field ("title" or "content").
+
+    Direction can be "asc" or "desc".
+    """
     sort_direc = direction == "desc"
     sorted_list = sorted(lst, key=lambda x: x[sort_field], reverse=sort_direc )
     return sorted_list
@@ -122,8 +131,9 @@ def get_posts():
 @app.route("/api/posts/search", methods=["GET"])
 @limiter.limit(LIMIT_REQ)
 def search_posts():
-    """GET-request route for searching and returning posts with the search
-    phrase in the title or content. Returns an empty list if no match is found.
+    """Search posts by title and/or content query parameters.
+
+    Returns all matching posts (or an empty list if none match).
     """
     app.logger.debug(f"{request.method} request received for api/posts/search")
     title_query = request.args.get("title", "").strip().lower()
@@ -145,7 +155,10 @@ def search_posts():
 @app.route("/api/posts/<int:post_id>", methods=["PUT"])
 @limiter.limit(LIMIT_REQ)
 def update_post(post_id):
-    """Updates a Post by id"""
+    """Update a post by ID.
+
+    Only updates fields that are provided in the request.
+    """
     app.logger.debug(f"{request.method} request received for api/posts/{post_id}")
     post = find_post_by_id(post_id)
     if post is None:
@@ -169,7 +182,7 @@ def update_post(post_id):
 @app.route("/api/posts/<int:post_id>", methods=["DELETE"])
 @limiter.limit(LIMIT_REQ)
 def delete_post(post_id):
-    """Deletes a Post by id"""
+    """Delete a post by ID and return the deleted post."""
     app.logger.debug(f"{request.method} request received for api/posts/{post_id}")
     post = find_post_by_id(post_id)
     if post is None:
@@ -182,7 +195,7 @@ def delete_post(post_id):
 
 @app.errorhandler(400)
 def bad_request_error(error):
-    """handle invalid data error"""
+    """Handle invalid requests (400)."""
     return jsonify(
         {"error": f"Bad Request: {error.description}!"}
     ), 400
@@ -190,17 +203,19 @@ def bad_request_error(error):
 
 @app.errorhandler(404)
 def not_found_error(error):
-    """handle http errors in case a ressource is not found"""
+    """Handle cases where a resource was not found (404)."""
     return jsonify({"error": f"Not found: {error.description}"}), 404
 
 
 @app.errorhandler(405)
 def method_not_allowed_error(error):
+    """Handle unsupported HTTP methods (405)."""
     return jsonify({"error": "Method Not Allowed"}), 405
 
 
 @app.errorhandler(429)
 def to_many_requests_error(error):
+    """Handle rate limit errors (429)."""
     return jsonify({"error": "Too Many Requests! 10 per minute allowed."}), 429
 
 
